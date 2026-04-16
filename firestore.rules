@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Validation for user profile creation
+    function isValidProfileCreate(userId) {
+      return request.resource.data.userId == userId
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.createdAt != null;
+    }
+
+    // USER DATA: Private to each user
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidProfileCreate(userId);
+      allow update: if isOwner(userId)
+        && request.resource.data.userId == userId; // Prevent UID hijacking
+      allow delete: if false; // Profiles shouldn't be deleted for this demo
+    }
+
+    // GYM MEMBERS: Used for dashboard demo
+    match /gymMembers/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // CLASS BOOKINGS: Future feature
+    match /classBookings/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // LIVE ANNOUNCEMENTS: Publicly readable, admin writable
+    match /liveAnnouncements/{docId} {
+      allow read: if true; // Everyone can see gym announcements
+      // In a real app, you would check for an 'admin' role in request.auth.token or a users document
+      allow write: if isSignedIn()
+        && request.auth.token.admin == true;
+    }
+  }
+}

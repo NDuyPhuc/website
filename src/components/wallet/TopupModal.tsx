@@ -31,7 +31,9 @@ export default function TopupModal({ isOpen, onClose, userId, onOrderCreated }: 
       const res = await createTopupOrder(userId, selectedAmount, `Titan Forge Topup for ${userId}`);
       onOrderCreated(res.orderCode);
     } catch (err: any) {
-      setError(err);
+      // Ensure error is a string to avoid React Error #31 (rendering an object)
+      const message = typeof err === 'string' ? err : (err?.message || "An unexpected error occurred");
+      setError(message);
     } finally {
       setLoading(false);
     }

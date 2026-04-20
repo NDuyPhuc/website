@@ -11,27 +11,56 @@ export default function PaymentResultPage() {
   const orderCode = searchParams.get('orderCode');
   const [orderData, setOrderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [webhookVerified, setWebhookVerified] = useState(false);
 
   useEffect(() => {
-    if (orderCode) {
-      const fetchOrder = async () => {
+    if (!orderCode) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchOrder = async () => {
+      try {
+        const docRef = doc(db, 'paymentOrders', orderCode);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setOrderData(data);
+          setWebhookVerified(data.webhookVerified);
+        }
+      } catch (err) {
+        console.error("Error fetching order:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrder();
+
+    // If payment was successful, poll for webhook verification every 2 seconds
+    if (status === 'success' && orderCode) {
+      const pollInterval = setInterval(async () => {
         try {
-          const docRef = doc(db, 'paymentOrders', orderCode);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            setOrderData(docSnap.data());
+          const response = await fetch(`/api/order-status/${orderCode}`);
+          if (!response.ok) throw new Error('Failed to fetch order status');
+          
+          const data = await response.json();
+          if (data.order) {
+            setOrderData(data.order);
+            if (data.order.webhookVerified) {
+              console.log('✅ Webhook verified! Payment processed.');
+              setWebhookVerified(true);
+              clearInterval(pollInterval); // Stop polling once verified
+            }
           }
         } catch (err) {
-          console.error("Error fetching order:", err);
-        } finally {
-          setLoading(false);
+          console.warn("Error polling order status:", err);
         }
-      };
-      fetchOrder();
-    } else {
-      setLoading(false);
+      }, 2000); // Poll every 2 seconds
+
+      return () => clearInterval(pollInterval); // Cleanup interval
     }
-  }, [orderCode]);
+  }, [orderCode, status]);
 
   const isSuccess = status === 'success';
   const isCancelled = status === 'cancelled';
@@ -49,7 +78,17 @@ export default function PaymentResultPage() {
               <CheckCircle className="w-10 h-10 text-green-500" />
             </div>
             <h1 className="text-3xl font-display font-bold text-white mb-2 uppercase italic tracking-tighter">Payment <span className="text-green-500">Successful</span></h1>
-            <p className="text-gray-400 text-sm mb-8">Titan Credits have been forged and added to your wallet.</p>
+            <p className="text-gray-400 text-sm mb-8">
+              {webhookVerified 
+                ? "Titan Credits have been forged and added to your wallet. ✓" 
+                : "Processing payment verification... Crediting wallet shortly."}
+            </p>
+            {!webhookVerified && (
+              <div className="mb-6 text-xs text-gray-500 flex items-center gap-2 justify-center">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                Waiting for payment confirmation...
+              </div>
+            )}
           </div>
         ) : isCancelled ? (
           <div className="flex flex-col items-center">

@@ -423,6 +423,139 @@ app.post("/api/test-webhook-trigger", async (req, res) => {
   }
 });
 
+// 3. Check PayOS Payment Status and Auto-Process if PAID
+app.get("/api/check-payos-status/:orderCode", async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+    
+    if (!payos) {
+      return res.status(503).json({ error: "PayOS not configured" });
+    }
+
+    // Get order from Firestore
+    const orderRef = db.collection("paymentOrders").doc(orderCode);
+    const orderSnap = await orderRef.get();
+
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const orderData = orderSnap.data()!;
+    
+    // Query PayOS to get actual payment link status
+    console.log(`\n=== CHECKING PAYOS STATUS ===`);
+    console.log(`Checking payment status for orderCode: ${orderCode}`);
+
+    const paymentLinkStatus = await payos.paymentRequests.get(Number(orderCode));
+    console.log('PayOS response:', JSON.stringify(paymentLinkStatus, null, 2));
+
+    // If user already paid according to Firestore, return that status
+    if (orderData.status === "PAID" && orderData.webhookVerified) {
+      return res.json({
+        success: true,
+        status: "PAID",
+        source: "firestore",
+        order: {
+          orderCode: orderData.orderCode,
+          amount: orderData.amount,
+          status: "PAID",
+          webhookVerified: true
+        }
+      });
+    }
+
+    // Check if PayOS shows payment is successful
+    if (paymentLinkStatus && (paymentLinkStatus.status === "PAID" || paymentLinkStatus.code === "00")) {
+      console.log(`✅ Payment detected as PAID on PayOS! Processing...`);
+
+      // If not yet marked as PAID in our system, process it now
+      if (orderData.status !== "PAID") {
+        const userId = orderData.userId;
+        const amount = orderData.amount;
+
+        // Process the payment exactly like webhook would
+        await db.runTransaction(async (transaction) => {
+          const walletRef = db.collection("wallets").doc(userId);
+          const walletSnap = await transaction.get(walletRef);
+          const currentBalance = walletSnap.exists ? walletSnap.data()?.balance || 0 : 0;
+
+          transaction.set(
+            walletRef,
+            {
+              balance: currentBalance + amount,
+              userId,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(db.collection("walletTransactions").doc(), {
+            userId,
+            type: "TOPUP",
+            amount,
+            credits: amount,
+            status: "COMPLETED",
+            orderCode: Number(orderCode),
+            createdAt: FieldValue.serverTimestamp(),
+            source: "payos-polling"
+          });
+
+          transaction.update(orderRef, {
+            status: "PAID",
+            paidAt: FieldValue.serverTimestamp(),
+            webhookVerified: true,
+            processedVia: "polling"
+          });
+
+          transaction.set(
+            db.collection("users").doc(userId),
+            {
+              totalTopup: FieldValue.increment(amount),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        });
+
+        console.log(`✅ Payment processed via polling for order ${orderCode}`);
+      }
+
+      return res.json({
+        success: true,
+        status: "PAID",
+        source: "payos-polling",
+        message: "Payment verified and wallet credited",
+        order: {
+          orderCode: orderData.orderCode,
+          amount: orderData.amount,
+          status: "PAID",
+          webhookVerified: true
+        }
+      });
+    }
+
+    // Payment still pending
+    console.log(`Payment still PENDING for orderCode: ${orderCode}`);
+    return res.json({
+      success: true,
+      status: paymentLinkStatus?.status || "PENDING",
+      source: "payos",
+      order: {
+        orderCode: orderData.orderCode,
+        amount: orderData.amount,
+        status: orderData.status,
+        webhookVerified: orderData.webhookVerified
+      }
+    });
+  } catch (error: any) {
+    console.error("check-payos-status error:", error);
+    res.status(500).json({ 
+      error: error?.message || "Failed to check payment status",
+      details: error?.response?.data || error?.message
+    });
+  }
+});
+
 // Local development listener
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   try {

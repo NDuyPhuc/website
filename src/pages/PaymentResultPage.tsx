@@ -12,10 +12,13 @@ export default function PaymentResultPage() {
   const [orderData, setOrderData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [webhookVerified, setWebhookVerified] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
 
   useEffect(() => {
     if (!orderCode) {
       setLoading(false);
+      setError("No order found");
       return;
     }
 
@@ -27,9 +30,13 @@ export default function PaymentResultPage() {
           const data = docSnap.data();
           setOrderData(data);
           setWebhookVerified(data.webhookVerified);
+          setError(null);
+        } else {
+          setError("Order not found in our system. Payment may still be processing.");
         }
       } catch (err) {
         console.error("Error fetching order:", err);
+        setError("Failed to fetch order details");
       } finally {
         setLoading(false);
       }
@@ -37,28 +44,38 @@ export default function PaymentResultPage() {
 
     fetchOrder();
 
-    // If payment was successful, poll for webhook verification every 2 seconds
+    // If payment was successful, poll PayOS status every 2 seconds
     if (status === 'success' && orderCode) {
       const pollInterval = setInterval(async () => {
         try {
-          const response = await fetch(`/api/order-status/${orderCode}`);
-          if (!response.ok) throw new Error('Failed to fetch order status');
+          setPollCount(prev => prev + 1);
+          const response = await fetch(`/api/check-payos-status/${orderCode}`);
+          
+          if (!response.ok) {
+            console.warn(`Poll attempt ${pollCount}: Status ${response.status}`);
+            return;
+          }
           
           const data = await response.json();
+          console.log(`Poll attempt ${pollCount}:`, data);
+          
           if (data.order) {
             setOrderData(data.order);
-            if (data.order.webhookVerified) {
-              console.log('✅ Webhook verified! Payment processed.');
-              setWebhookVerified(true);
-              clearInterval(pollInterval); // Stop polling once verified
-            }
+          }
+          
+          // If PayOS confirms payment is PAID, stop polling
+          if (data.status === "PAID") {
+            console.log('✅ Payment confirmed! Wallet will update via real-time listener.');
+            setWebhookVerified(true);
+            setError(null);
+            clearInterval(pollInterval);
           }
         } catch (err) {
-          console.warn("Error polling order status:", err);
+          console.warn(`Poll attempt ${pollCount} error:`, err);
         }
       }, 2000); // Poll every 2 seconds
 
-      return () => clearInterval(pollInterval); // Cleanup interval
+      return () => clearInterval(pollInterval);
     }
   }, [orderCode, status]);
 
@@ -79,14 +96,21 @@ export default function PaymentResultPage() {
             </div>
             <h1 className="text-3xl font-display font-bold text-white mb-2 uppercase italic tracking-tighter">Payment <span className="text-green-500">Successful</span></h1>
             <p className="text-gray-400 text-sm mb-8">
-              {webhookVerified 
-                ? "Titan Credits have been forged and added to your wallet. ✓" 
-                : "Processing payment verification... Crediting wallet shortly."}
+              {error 
+                ? error
+                : webhookVerified 
+                  ? "Titan Credits have been forged and added to your wallet. ✓" 
+                  : "Processing payment verification... Checking with PayOS..."}
             </p>
-            {!webhookVerified && (
+            {!webhookVerified && !error && (
               <div className="mb-6 text-xs text-gray-500 flex items-center gap-2 justify-center">
                 <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                Waiting for payment confirmation...
+                Verifying payment ({pollCount}s)...
+              </div>
+            )}
+            {error && !webhookVerified && (
+              <div className="mb-6 text-xs text-yellow-600 bg-yellow-600/10 p-3 rounded border border-yellow-600/20 text-left">
+                {error}
               </div>
             )}
           </div>

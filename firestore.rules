@@ -24,8 +24,28 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId) && isValidProfileCreate(userId);
       allow update: if isOwner(userId)
-        && request.resource.data.userId == userId; // Prevent UID hijacking
-      allow delete: if false; // Profiles shouldn't be deleted for this demo
+        && request.resource.data.userId == userId; 
+      allow delete: if false; 
+    }
+
+    // WALLETS: Only owner can read, but NO ONE can update from client-side
+    // Balance updates must happen via backend (Admin SDK)
+    match /wallets/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Strict: Backend only updates
+    }
+
+    // WALLET TRANSACTIONS: Only owner can read his transactions
+    match /walletTransactions/{txId} {
+      allow read: if isOwner(resource.data.userId);
+      allow write: if false; // Strict: Backend only
+    }
+
+    // PAYMENT ORDERS: Only owner can read, but status updates are backend-only
+    match /paymentOrders/{orderId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if false; // Order creation happens via backend API
+      allow update, delete: if false; // Status updates via webhook (backend)
     }
 
     // GYM MEMBERS: Used for dashboard demo

@@ -10,9 +10,11 @@ import {
   Loader2,
   CheckCircle2,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Wallet as WalletIcon
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { useWallet } from '../hooks/useWallet';
 import { 
   subscribeToUserProfile, 
   subscribeToAnnouncements, 
@@ -23,6 +25,7 @@ import {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { wallet } = useWallet(user?.uid);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -187,8 +190,9 @@ export default function Dashboard() {
               </div>
             </form>
 
-            <div className="mt-12 grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mt-12 grid grid-cols-2 lg:grid-cols-5 gap-4">
                {[
+                 { label: 'TITAN CREDITS', val: new Intl.NumberFormat('vi-VN').format(wallet?.balance || 0) + '₫', icon: WalletIcon },
                  { label: 'WORKOUTS', val: '12', icon: Activity },
                  { label: 'STREAK', val: '5 DAYS', icon: TrendingUp },
                  { label: 'PLAN', val: profile?.membershipPlan || 'LEVEL 1', icon: CheckCircle2 },

@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Basic user account information and aggregate stats",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "totalTopup": { "type": "number", "description": "Total amount recharged over time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "displayName"]
+    },
+    "Wallet": {
+      "title": "User Wallet",
+      "description": "Current balance for the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balance": { "type": "number", "description": "Current credit balance in VND" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PaymentOrder": {
+      "title": "Payment Order",
+      "description": "Details of a PayOS payment intent",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "orderCode": { "type": "number" },
+        "paymentLinkId": { "type": "string" },
+        "amount": { "type": "number" },
+        "credits": { "type": "number" },
+        "status": { "type": "string", "enum": ["PENDING", "PAID", "CANCELLED"] },
+        "qrCode": { "type": "string" },
+        "checkoutUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paidAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "WalletTransaction": {
+      "title": "Wallet Transaction",
+      "description": "Record of a specific credit change",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["TOPUP", "PURCHASE"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["COMPLETED", "FAILED"] },
+        "orderCode": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    },
+    "/wallets/{userId}": {
+      "schema": "Wallet",
+      "description": "User balance information"
+    },
+    "/paymentOrders/{orderCode}": {
+      "schema": "PaymentOrder",
+      "description": "Payment intents created via PayOS"
+    },
+    "/walletTransactions/{txId}": {
+      "schema": "WalletTransaction",
+      "description": "History of all financial movements"
+    }
+  }
+}

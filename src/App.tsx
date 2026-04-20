@@ -2,6 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './lib/auth';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -18,6 +19,8 @@ import FAQ from './components/FAQ';
 import FinalCTA from './components/FinalCTA';
 import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
+import WalletPage from './pages/WalletPage';
+import ProfilePage from './pages/ProfilePage';
 import Loader from './components/Loader';
 
 function MainContent() {
@@ -29,24 +32,40 @@ function MainContent() {
     <main className="min-h-screen bg-black text-white selection:bg-red-600 selection:text-white">
       <Navbar />
       
-      {user ? (
-        <Dashboard />
-      ) : (
-        <>
-          <Hero />
-          <Trust />
-          <About />
-          <Services />
-          <WhyChoose />
-          <Results />
-          <Trainers />
-          <Membership />
-          <Testimonials />
-          <Gallery />
-          <FAQ />
-          <FinalCTA />
-        </>
-      )}
+      <Routes>
+        <Route path="/" element={
+           user ? (
+             <Dashboard />
+           ) : (
+             <>
+               <Hero />
+               <Trust />
+               <About />
+               <Services />
+               <WhyChoose />
+               <Results />
+               <Trainers />
+               <Membership />
+               <Testimonials />
+               <Gallery />
+               <FAQ />
+               <FinalCTA />
+             </>
+           )
+        } />
+        
+        <Route 
+          path="/wallet" 
+          element={user ? <WalletPage /> : <Navigate to="/" replace />} 
+        />
+        
+        <Route 
+          path="/profile" 
+          element={user ? <ProfilePage /> : <Navigate to="/" replace />} 
+        />
+        
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
       
       <Footer />
     </main>
@@ -56,7 +75,9 @@ function MainContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <MainContent />
+      <BrowserRouter>
+        <MainContent />
+      </BrowserRouter>
     </AuthProvider>
   );
 }

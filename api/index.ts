@@ -96,25 +96,19 @@ app.post("/api/payos-webhook", async (req, res) => {
 
 // Init logic
 async function init() {
-  if (process.env.NODE_ENV !== "production") {
-    // Dynamic import to avoid loading Vite/Rollup binaries in production (Vercel)
-    const { createServer } = await import("vite");
-    const vite = await createServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-    
-    app.listen(PORT, "0.0.0.0", () => console.log(`Dev server running on port ${PORT}`));
-  } else {
-    if (!process.env.VERCEL) {
-      const distPath = path.join(process.cwd(), 'dist');
-      app.use(express.static(distPath));
-      app.get('*', (req, res, next) => {
-        if (req.path.startsWith('/api')) return next();
-        res.sendFile(path.join(distPath, 'index.html'));
+  // STRICT CHECK: Never load Vite in production or on Vercel
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    try {
+      // Dynamic import ensures Vite isn't bundled or loaded in production
+      const { createServer } = await import("vite");
+      const vite = await createServer({
+        server: { middlewareMode: true },
+        appType: "spa",
       });
-      app.listen(PORT, "0.0.0.0", () => console.log(`Production server running on port ${PORT}`));
+      app.use(vite.middlewares);
+      app.listen(PORT, "0.0.0.0", () => console.log(`Dev server running on port ${PORT}`));
+    } catch (e) {
+      console.warn("Vite failed to load, continuing in standalone mode", e);
     }
   }
 }

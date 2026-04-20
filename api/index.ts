@@ -265,51 +265,121 @@ app.post("/api/payos-webhook", async (req, res) => {
 });
 
 // Test endpoint - simulate PayOS webhook
-app.post("/api/test-webhook", async (req, res) => {
+app.post("/api/test-webhook-trigger", async (req, res) => {
   try {
-    console.log('Test webhook called with body:', JSON.stringify(req.body, null, 2));
+    const { orderCode, amount } = req.body;
     
-    // Simulate PayOS webhook with test data
-    const testWebhookData = {
+    if (!orderCode || !amount) {
+      return res.status(400).json({ error: "Missing orderCode or amount" });
+    }
+
+    console.log(`\n=== TEST WEBHOOK TRIGGER ===`);
+    console.log(`Testing webhook with orderCode: ${orderCode}, amount: ${amount}`);
+
+    // Simulate PayOS webhook payload
+    const mockWebhookData = {
       code: "00",
       desc: "success",
       success: true,
       data: {
-        orderCode: req.body.orderCode || 12345678,
-        amount: req.body.amount || 10000,
-        description: "TEST TOPUP",
+        orderCode: Number(orderCode),
+        amount: Number(amount),
+        description: "TEST_TOPUP",
         accountNumber: "1234567890",
-        reference: "TEST123",
+        reference: "TEST_REF_" + Date.now(),
         transactionDateTime: new Date().toISOString(),
         currency: "VND",
-        paymentLinkId: "test-link-id",
+        paymentLinkId: "test-link-id-" + Date.now(),
         code: "00",
         desc: "Thành công"
       },
-      signature: "test-signature"
+      signature: "test-signature-for-testing"
     };
 
-    // Forward to webhook handler
-    const mockReq = {
-      body: testWebhookData
-    };
-    const mockRes = {
-      json: (data) => res.json({ test: true, ...data }),
-      status: (code) => ({
-        json: (data) => res.status(code).json({ test: true, ...data })
-      })
-    };
+    console.log('Mock webhook payload:', JSON.stringify(mockWebhookData, null, 2));
 
-    // Call webhook directly
-    const webhookPost = app._router.stack.find(r => r.route && r.route.path === '/api/payos-webhook' && r.route.methods.post);
-    if (webhookPost) {
-      console.log('Webhook endpoint found, forwarding test data...');
+    // Now call the actual webhook handler
+    // First check if order exists
+    const orderRef = db.collection("paymentOrders").doc(String(orderCode));
+    const orderSnap = await orderRef.get();
+    
+    if (!orderSnap.exists) {
+      return res.status(404).json({ 
+        error: "Order not found",
+        orderCode,
+        checkedAt: new Date().toISOString()
+      });
     }
 
-    return res.json({ success: true, message: "Test webhook sent to handler. Check API logs." });
+    const currentOrder = orderSnap.data();
+    console.log('Found order:', currentOrder);
+
+    // Simulate webhook processing
+    if (mockWebhookData.code === "00" && mockWebhookData.desc === "success") {
+      const userId = currentOrder.userId;
+      const txAmount = mockWebhookData.data.amount;
+
+      console.log(`Processing payment for user: ${userId}, amount: ${txAmount}`);
+
+      // Update wallet
+      await db.runTransaction(async (transaction) => {
+        const walletRef = db.collection("wallets").doc(userId);
+        const walletSnap = await transaction.get(walletRef);
+        const currentBalance = walletSnap.exists ? walletSnap.data()?.balance || 0 : 0;
+
+        transaction.set(
+          walletRef,
+          {
+            balance: currentBalance + txAmount,
+            userId,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        transaction.set(db.collection("walletTransactions").doc(), {
+          userId,
+          type: "TOPUP",
+          amount: txAmount,
+          credits: txAmount,
+          status: "COMPLETED",
+          orderCode: Number(orderCode),
+          createdAt: FieldValue.serverTimestamp(),
+          isTest: true
+        });
+
+        transaction.update(orderRef, {
+          status: "PAID",
+          paidAt: FieldValue.serverTimestamp(),
+          webhookVerified: true,
+          testProcessed: true
+        });
+
+        transaction.set(
+          db.collection("users").doc(userId),
+          {
+            totalTopup: FieldValue.increment(txAmount),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      });
+
+      console.log(`✅ Test webhook processed successfully!`);
+      return res.json({ 
+        success: true, 
+        message: "Test webhook processed successfully",
+        orderCode,
+        userId,
+        amount: txAmount,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    res.status(400).json({ error: "Test webhook code was not 00/success" });
   } catch (error: any) {
-    console.error("test-webhook error:", error);
-    return res.status(500).json({ error: error?.message || "Test webhook failed" });
+    console.error("test-webhook-trigger error:", error);
+    res.status(500).json({ error: error?.message || "Test webhook failed" });
   }
 });
 

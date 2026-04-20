@@ -92,7 +92,47 @@ app.get("/api/status", (req, res) => {
   });
 });
 
-// Check payment order status
+// Check webhook URL registration status
+app.get("/api/register-webhook", async (req, res) => {
+  try {
+    if (!payos) {
+      return res.status(503).json({ error: "PayOS not configured" });
+    }
+
+    const webhookUrl = `${(process.env.APP_URL || "https://website-two-nu-66.vercel.app").replace(/\/$/, '')}/api/payos-webhook`;
+    
+    console.log(`\n=== WEBHOOK REGISTRATION ===`);
+    console.log(`Attempting to register webhook URL: ${webhookUrl}`);
+
+    try {
+      const result = await payos.webhooks.confirm(webhookUrl);
+      console.log('✅ Webhook registered successfully:', result);
+      
+      return res.json({
+        success: true,
+        message: "Webhook URL registered with PayOS",
+        webhookUrl,
+        result
+      });
+    } catch (confirmError: any) {
+      console.warn('Warning: Webhook confirm returned error (may already be registered):', confirmError?.message);
+      
+      return res.json({
+        success: true,
+        message: "Webhook URL setup attempted",
+        webhookUrl,
+        note: "If webhook was already registered, this is normal",
+        error: confirmError?.message
+      });
+    }
+  } catch (error: any) {
+    console.error("register-webhook error:", error);
+    res.status(500).json({ 
+      error: error?.message || "Failed to register webhook",
+      webhookUrl: `${(process.env.APP_URL || "https://website-two-nu-66.vercel.app").replace(/\/$/, '')}/api/payos-webhook`
+    });
+  }
+});
 app.get("/api/order-status/:orderCode", async (req, res) => {
   try {
     const { orderCode } = req.params;

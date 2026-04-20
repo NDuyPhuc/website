@@ -62,6 +62,14 @@ try {
       checksumKey,
     });
     console.log('PayOS initialized');
+
+    // Register webhook URL on startup (async, non-blocking)
+    const webhookUrl = `${(process.env.APP_URL || "https://website-two-nu-66.vercel.app").replace(/\/$/, '')}/api/payos-webhook`;
+    if (payos && process.env.VERCEL) {
+      payos.webhooks.confirm(webhookUrl)
+        .then(() => console.log(`PayOS webhook URL registered: ${webhookUrl}`))
+        .catch((err) => console.warn(`Warning: Could not auto-register webhook URL. Please manually set it in PayOS Dashboard to: ${webhookUrl}`, err?.message));
+    }
   } else {
     console.warn('PayOS is not configured. Set PAYOS_CLIENT_ID, PAYOS_API_KEY, and PAYOS_CHECKSUM_KEY to enable payments.');
   }
@@ -82,6 +90,36 @@ app.get("/api/status", (req, res) => {
     webhookUrl: `${(process.env.APP_URL || "https://website-two-nu-66.vercel.app").replace(/\/$/, '')}/api/payos-webhook`,
     payosConfigured: !!payos,
   });
+});
+
+// Check payment order status
+app.get("/api/order-status/:orderCode", async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+    const orderRef = db.collection("paymentOrders").doc(orderCode);
+    const orderSnap = await orderRef.get();
+
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const orderData = orderSnap.data();
+    res.json({
+      success: true,
+      order: {
+        orderCode: orderData.orderCode,
+        userId: orderData.userId,
+        amount: orderData.amount,
+        status: orderData.status,
+        webhookVerified: orderData.webhookVerified,
+        createdAt: orderData.createdAt,
+        paidAt: orderData.paidAt || null
+      }
+    });
+  } catch (error: any) {
+    console.error("order-status error:", error);
+    res.status(500).json({ error: error?.message || "Failed to get order status" });
+  }
 });
 
 // 1. Create Top-up Order

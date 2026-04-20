@@ -45,7 +45,7 @@ export default function PaymentResultPage() {
     fetchOrder();
 
     // If payment was successful, poll PayOS status every 2 seconds
-    if (status === 'success' && orderCode) {
+    if ((status === 'success' || status === 'PAID') && orderCode) {
       const pollInterval = setInterval(async () => {
         try {
           setPollCount(prev => prev + 1);
@@ -79,7 +79,7 @@ export default function PaymentResultPage() {
     }
   }, [orderCode, status]);
 
-  const isSuccess = status === 'success';
+  const isSuccess = status === 'success' || status === 'PAID';
   const isCancelled = status === 'cancelled';
 
   return (

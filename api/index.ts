@@ -6,18 +6,33 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Initialize Firebase Admin
-if (admin.apps.length === 0) {
-  admin.initializeApp();
+console.log('API Server starting with NODE_ENV:', process.env.NODE_ENV);
+
+// Initialize Firebase Admin with better error handling
+try {
+  if (admin.apps.length === 0) {
+    console.log('Initializing Firebase Admin...');
+    admin.initializeApp();
+    console.log('Firebase Admin initialized successfully');
+  }
+} catch (error) {
+  console.error('Firebase Admin Initialization Error:', error);
 }
+
 const db = admin.firestore();
 
 // PayOS initialization
-const payos = new (PayOS as any)(
-  process.env.PAYOS_CLIENT_ID || "REPLACE_WITH_YOUR_PAYOS_CLIENT_ID",
-  process.env.PAYOS_API_KEY || "REPLACE_WITH_YOUR_PAYOS_API_KEY",
-  process.env.PAYOS_CHECKSUM_KEY || "REPLACE_WITH_YOUR_PAYOS_CHECKSUM_KEY"
-);
+let payos: any;
+try {
+  payos = new (PayOS as any)(
+    process.env.PAYOS_CLIENT_ID || "REPLACE_WITH_YOUR_PAYOS_CLIENT_ID",
+    process.env.PAYOS_API_KEY || "REPLACE_WITH_YOUR_PAYOS_API_KEY",
+    process.env.PAYOS_CHECKSUM_KEY || "REPLACE_WITH_YOUR_PAYOS_CHECKSUM_KEY"
+  );
+  console.log('PayOS initialized');
+} catch (error) {
+  console.error('PayOS Initialization Error:', error);
+}
 
 const app = express();
 const PORT = 3001; // Use a different port for API in local dev
@@ -156,9 +171,13 @@ app.post("/api/payos-webhook", async (req, res) => {
 
 // Local development listener
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`API Server running on http://localhost:${PORT}`);
-  });
+  try {
+    app.listen(PORT, "127.0.0.1", () => {
+      console.log(`API Server running on http://127.0.0.1:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to start API listener:', err);
+  }
 }
 
 export default app;

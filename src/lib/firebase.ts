@@ -32,8 +32,8 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Initialize App Check
-// Note: This requires a reCAPTCHA v3 or Enterprise site key
+// App Check disabled for debugging fetch polyfill issue
+/*
 const reCaptchaSiteKey = import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY || "REPLACE_WITH_YOUR_RECAPTCHA_SITE_KEY";
 
 if (typeof window !== 'undefined' && reCaptchaSiteKey !== "REPLACE_WITH_YOUR_RECAPTCHA_SITE_KEY") {
@@ -42,5 +42,6 @@ if (typeof window !== 'undefined' && reCaptchaSiteKey !== "REPLACE_WITH_YOUR_REC
     isTokenAutoRefreshEnabled: true
   });
 }
+*/
 
 export default app;

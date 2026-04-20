@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import PayOS from "@payos/node";
 import * as admin from 'firebase-admin';
@@ -95,21 +94,28 @@ app.post("/api/payos-webhook", async (req, res) => {
   }
 });
 
-// Init Vite/Listen logic
+// Init logic
 async function init() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api')) return next();
-      res.sendFile(path.join(distPath, 'index.html'));
+    // Dynamic import to avoid loading Vite/Rollup binaries in production (Vercel)
+    const { createServer } = await import("vite");
+    const vite = await createServer({
+      server: { middlewareMode: true },
+      appType: "spa",
     });
-  }
-  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));
+    app.use(vite.middlewares);
+    
+    app.listen(PORT, "0.0.0.0", () => console.log(`Dev server running on port ${PORT}`));
+  } else {
+    if (!process.env.VERCEL) {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api')) return next();
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+      app.listen(PORT, "0.0.0.0", () => console.log(`Production server running on port ${PORT}`));
+    }
   }
 }
 

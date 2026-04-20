@@ -21,6 +21,7 @@ import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
 import WalletPage from './pages/WalletPage';
 import ProfilePage from './pages/ProfilePage';
+import PaymentResultPage from './pages/PaymentResultPage';
 import Loader from './components/Loader';
 
 function MainContent() {
@@ -62,6 +63,11 @@ function MainContent() {
         <Route 
           path="/profile" 
           element={user ? <ProfilePage /> : <Navigate to="/" replace />} 
+        />
+
+        <Route 
+          path="/payment-result" 
+          element={user ? <PaymentResultPage /> : <Navigate to="/" replace />} 
         />
         
         <Route path="*" element={<Navigate to="/" replace />} />
